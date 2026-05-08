@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+FastAPI entrypoint for the Minitab‑Web data‑analysis service.
+"""
+import os
+import tempfile
+from typing import List, Dict, Any
+
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+import pandas as pd
+
+app = FastAPI()
+
+# ----------------------------------------------------------------------
+# Helper utilities
+# ----------------------------------------------------------------------
+def _save_to_temp(file_obj: UploadFile) -> str:
+    """Write uploaded file to a temporary file and return its path."""
+    suffix = os.path.splitext(file_obj.filename)[1].lower()
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    # Copy chunks to avoid loading whole file into memory twice
+    with tmp as tmpfile:
+        for chunk in file_obj.file:
+            tmpfile.write(chunk)
+        return tmp.name
+
+
+def _infer_schema(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Convert DataFrame schema to a serialisable list of column meta."""
+    schema = []
+    for col_name, dtype in df.dtypes.items():
+        schema.append(
+            {
+                "name": col_name,
+                "type": "numeric" if pd.api.types.is_numeric_dtype(dtype) else "categorical",
+                "non_null": int(df[col_name].notna().sum()),
+                "null_pct": round(100 * df[col_name].isna().mean(), 2),
+                "unique_values": df[col_name].nunique(),
+            }
+        )
+    return schema
+
+
+def _sample_df(df: pd.DataFrame, n: int = 5) -> List[Dict[str, Any]]:
+    """Return the first *n* rows as a serialisable list of mapping."""
+    sample = df.head(n)
+    return sample.to_dict(orient="records")
+
+
+# ----------------------------------------------------------------------
+# Endpoints
+# ----------------------------------------------------------------------
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """
+    Accept a CSV or Excel file, parse it, and return basic meta‑information.
+    """
+    if not file.content_type.startswith(("text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")):
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    # Save to temporary storage
+    tmp_path = _save_to_temp(file)
+
+    try:
+        # Load data according to extension
+        if tmp_path.lower().endswith(".csv"):
+            df = pd.read_csv(tmp_path)
+        elif tmp_path.lower().endswith((".xlsx", ".xls")):
+            df = pd.read_excel(tmp_path)
+        else:
+            raise HTTPException(status_code=400, detail="File must be .csv, .xlsx or .xls")
+        
+        # Basic sanity checks
+        if df.empty:
+            raise HTTPException(status_code=400, detail="File is empty")
+
+        # Build meta payload
+        payload = {
+            "dataset_id": tmp_path,  # In a real service you'd persist the file or its hash
+            "filename": file.filename,
+            "rows": int(df.shape[0]),
+            "columns": _infer_schema(df),
+            "preview": _sample_df(df, n=5),
+        }
+        return JSONResponse(content=payload)
+
+    finally:
+        # Clean up the temporary file
+        os.remove(tmp_path)
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+
+# ----------------------------------------------------------------------
+# Run with: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# ----------------------------------------------------------------------
