@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 import pandas as pd
+import stats_utils
 
 app = FastAPI(title="Mintab Web API", version="0.1.0")
 
@@ -109,6 +110,50 @@ async def upload_file(file: UploadFile = File(...)):
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "datasets_count": len(datasets)}
+
+
+@app.post("/analyze")
+async def analyze_data(payload: Dict[str, Any]):
+    """
+    Analyze a previously uploaded dataset.
+    Expects JSON body: {"dataset_id": "<id>"}
+    Returns basic statistics for each numeric column.
+    """
+    dataset_id = payload.get("dataset_id")
+    if not dataset_id or dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    tmp_path = datasets[dataset_id]
+    try:
+        # Load the dataset
+        if tmp_path.lower().endswith(".csv"):
+            df = pd.read_csv(tmp_path)
+        elif tmp_path.lower().endswith((".xlsx", ".xls")):
+            df = pd.read_excel(tmp_path)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Dataset is empty")
+
+        # Calculate statistics for each column
+        results = {}
+        for col in df.columns:
+            series = df[col]
+            # Check if numeric
+            if pd.api.types.is_numeric_dtype(series):
+                try:
+                    stats = stats_utils.calculate_basic_stats(series)
+                    results[col] = stats
+                except ValueError as e:
+                    results[col] = {"error": str(e)}
+            else:
+                results[col] = {"type": "categorical", "unique": series.nunique()}
+
+        return JSONResponse(content={"dataset_id": dataset_id, "statistics": results})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 # ----------------------------------------------------------------------
