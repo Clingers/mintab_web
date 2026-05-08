@@ -7,10 +7,11 @@ import tempfile
 import uuid
 from typing import List, Dict, Any
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import JSONResponse
 import pandas as pd
 import stats_utils
+import plot_utils
 
 app = FastAPI(title="Mintab Web API", version="0.1.0")
 
@@ -154,6 +155,79 @@ async def analyze_data(payload: Dict[str, Any]):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/plot")
+async def generate_plot(request: Request):
+    """
+    Generate a plot based on a previously uploaded dataset.
+    Expects JSON body: {
+        "dataset_id": "<id>",
+        "plot_type": "scatter" | "histogram" | "boxplot" | "heatmap",
+        "x_col": optional for scatter,
+        "y_col": optional for scatter,
+        "column": optional for histogram/boxplot,
+        "columns": optional for boxplot (list),
+        "method": optional for heatmap (pearson/kendall/spearman)
+    }
+    Returns JSON: {"image": "<base64>", "format": "png"}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    dataset_id = body.get("dataset_id")
+    if not dataset_id or dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    plot_type = body.get("plot_type")
+    if not plot_type:
+        raise HTTPException(status_code=400, detail="Missing 'plot_type' parameter")
+
+    tmp_path = datasets[dataset_id]
+    try:
+        # Load dataset
+        if tmp_path.lower().endswith(".csv"):
+            df = pd.read_csv(tmp_path)
+        elif tmp_path.lower().endswith((".xlsx", ".xls")):
+            df = pd.read_excel(tmp_path)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Dataset is empty")
+
+        # Dispatch to appropriate plotting function
+        if plot_type == "scatter":
+            x_col = body.get("x_col")
+            y_col = body.get("y_col")
+            if not x_col or not y_col:
+                raise HTTPException(status_code=400, detail="Scatter plot requires 'x_col' and 'y_col'")
+            b64 = plot_utils.plot_scatter(df, x_col, y_col)
+        elif plot_type == "histogram":
+            column = body.get("column")
+            if not column:
+                raise HTTPException(status_code=400, detail="Histogram requires 'column' parameter")
+            series = df[column]
+            b64 = plot_utils.plot_histogram(series)
+        elif plot_type == "boxplot":
+            columns = body.get("columns")  # optional, list
+            b64 = plot_utils.plot_boxplot(df, columns=columns)
+        elif plot_type == "heatmap":
+            method = body.get("method", "pearson")
+            b64 = plot_utils.plot_heatmap(df, method=method)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported plot_type: {plot_type}")
+
+        return JSONResponse(content={"image": b64, "format": "png"})
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Plot generation failed: {str(e)}")
 
 
 # ----------------------------------------------------------------------
