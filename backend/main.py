@@ -9,12 +9,24 @@ from typing import List, Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import stats_utils
 import plot_utils
 
+
 app = FastAPI(title="Mintab Web API", version="0.1.0")
 
+# CORS configuration
+# Allow frontend origins (configure via environment variable CORS_ORIGINS if needed)
+allowed_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # In‑memory storage for uploaded datasets: dataset_id -> file path
 datasets: Dict[str, str] = {}
 
