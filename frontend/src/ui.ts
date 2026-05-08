@@ -3,7 +3,7 @@
  * 支持中文界面文案。
  */
 
-import type { ColumnMeta, StatsInfo, UploadResponse, PlotRequest } from './types';
+import type { ColumnMeta, StatsInfo, UploadResponse } from './types';
 
 /**
  * 渲染上传区域
@@ -137,9 +137,8 @@ export function renderStats(stats: Record<string, StatsInfo>): HTMLElement {
 /**
  * 渲染图表控制面板
  */
-export function renderPlotControls(columns: ColumnMeta[], datasetId: string): HTMLElement {
+export function renderPlotControls(columns: ColumnMeta[], _datasetId: string): HTMLElement {
     const numericCols = columns.filter(col => col.type === 'numeric').map(col => col.name);
-    const allCols = columns.map(col => col.name);
 
     const container = document.createElement('div');
     container.className = 'plot-controls';

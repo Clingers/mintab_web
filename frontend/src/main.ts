@@ -20,6 +20,8 @@ import {
 // 状态
 let currentDatasetId: string | null = null;
 let currentColumns: ColumnMeta[] = [];
+// currentPreview 暂时未使用，保留供将来扩展
+// let currentPreview: Record<string, any>[] = [];
 
 // DOM 容器
 const APP_CONTAINER_ID = 'app';
@@ -81,7 +83,6 @@ function init(): void {
 function bindUploadEvents(uploadArea: HTMLElement): void {
     const uploadBtn = uploadArea.querySelector('#upload-btn') as HTMLButtonElement;
     const fileInput = uploadArea.querySelector('#file-input') as HTMLInputElement;
-    const statusDiv = uploadArea.querySelector('#upload-status') as HTMLDivElement;
 
     uploadBtn?.addEventListener('click', async () => {
         if (!fileInput?.files?.[0]) {
@@ -95,11 +96,9 @@ function bindUploadEvents(uploadArea: HTMLElement): void {
         try {
             const response = await uploadFile(file);
             currentDatasetId = response.dataset_id;
-            currentColumns = response.columns.map(col => ({
-                name: col.name,
-                type: col.type,
-            }));
-            currentPreview = response.preview;
+            currentColumns = response.columns;  // response.columns is already ColumnMeta[]
+            // currentPreview 暂时未使用，保留供将来扩展
+            // currentPreview = response.preview;
 
             showStatus(`上传成功！数据集 ID: ${response.dataset_id}`, 'success');
 
