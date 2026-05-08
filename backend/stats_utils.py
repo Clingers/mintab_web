@@ -16,6 +16,7 @@ def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
     根据 pandas 的 dtype 判断列是数值型还是分类型。
     数值型包括: int, float, complex 等数值类型。
     分类型包括: object, string, categorical, boolean 等非数值类型。
+    注意: boolean 类型被视为分类型，因为不适合计算均值等统计量。
     
     Args:
         df: 输入的 pandas DataFrame
@@ -26,7 +27,10 @@ def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
     column_types = {}
     
     for col_name, dtype in df.dtypes.items():
-        if pd.api.types.is_numeric_dtype(dtype):
+        # 显式检查 boolean 类型，视为分类型
+        if pd.api.types.is_bool_dtype(dtype):
+            column_types[col_name] = 'categorical'
+        elif pd.api.types.is_numeric_dtype(dtype):
             column_types[col_name] = 'numeric'
         else:
             column_types[col_name] = 'categorical'
@@ -82,11 +86,12 @@ def calculate_basic_stats(series: pd.Series) -> Dict[str, Any]:
         'missing': len(series) - len(data),
     }
     
-    # 计算四分位数（如果数据足够）
+    # 计算四分位数（使用 pandas quantile，更符合数据分析习惯）
     if len(data) >= 4:
-        quantiles = statistics.quantiles(data, n=4)
-        stats['q1'] = quantiles[0]  # 25%
-        stats['q3'] = quantiles[2]  # 75%
+        # 使用 pandas Series 的 quantile 方法，默认线性插值
+        series_clean = pd.Series(data)
+        stats['q1'] = float(series_clean.quantile(0.25))
+        stats['q3'] = float(series_clean.quantile(0.75))
     else:
         # 数据太少，用 min 和 max 代替
         stats['q1'] = stats['min']
