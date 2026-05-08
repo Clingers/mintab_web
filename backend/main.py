@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 """
-FastAPI entrypoint for the Minitab‑Web data‑analysis service.
+FastAPI entrypoint for the Mintab‑Web data‑analysis service.
 """
 import os
 import tempfile
+import uuid
 from typing import List, Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 import pandas as pd
 
-app = FastAPI()
+app = FastAPI(title="Mintab Web API", version="0.1.0")
+
+# In‑memory storage for uploaded datasets: dataset_id -> file path
+datasets: Dict[str, str] = {}
+
 
 # ----------------------------------------------------------------------
 # Helper utilities
 # ----------------------------------------------------------------------
 def _save_to_temp(file_obj: UploadFile) -> str:
-    """Write uploaded file to a temporary file and return its path."""
+    """Write uploaded file to a temporary file and return a dataset_id."""
     suffix = os.path.splitext(file_obj.filename)[1].lower()
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     # Copy chunks to avoid loading whole file into memory twice
     with tmp as tmpfile:
         for chunk in file_obj.file:
             tmpfile.write(chunk)
-        return tmp.name
+    # Generate a unique dataset_id and store the path
+    dataset_id = str(uuid.uuid4())
+    datasets[dataset_id] = tmp.name
+    return dataset_id
 
 
 def _infer_schema(df: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -55,14 +63,16 @@ def _sample_df(df: pd.DataFrame, n: int = 5) -> List[Dict[str, Any]]:
 async def upload_file(file: UploadFile = File(...)):
     """
     Accept a CSV or Excel file, parse it, and return basic meta‑information.
+    Also generates a dataset_id for later analysis.
     """
     if not file.content_type.startswith(("text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")):
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
-    # Save to temporary storage
-    tmp_path = _save_to_temp(file)
+    # Save to temporary storage and get dataset_id
+    dataset_id = _save_to_temp(file)
 
     try:
+        tmp_path = datasets[dataset_id]
         # Load data according to extension
         if tmp_path.lower().endswith(".csv"):
             df = pd.read_csv(tmp_path)
@@ -70,14 +80,14 @@ async def upload_file(file: UploadFile = File(...)):
             df = pd.read_excel(tmp_path)
         else:
             raise HTTPException(status_code=400, detail="File must be .csv, .xlsx or .xls")
-        
+
         # Basic sanity checks
         if df.empty:
             raise HTTPException(status_code=400, detail="File is empty")
 
         # Build meta payload
         payload = {
-            "dataset_id": tmp_path,  # In a real service you'd persist the file or its hash
+            "dataset_id": dataset_id,
             "filename": file.filename,
             "rows": int(df.shape[0]),
             "columns": _infer_schema(df),
@@ -85,14 +95,20 @@ async def upload_file(file: UploadFile = File(...)):
         }
         return JSONResponse(content=payload)
 
-    finally:
-        # Clean up the temporary file
-        os.remove(tmp_path)
+    except Exception as e:
+        # Clean up on error
+        if dataset_id in datasets:
+            del datasets[dataset_id]
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "datasets_count": len(datasets)}
 
 
 # ----------------------------------------------------------------------
