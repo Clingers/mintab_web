@@ -1,6 +1,9 @@
 # Mintab Web
 
+* Updated front‑end: React + TypeScript + Vite + Tailwind + DaisyUI, modern tech UI, state managed by Zustand.
+
 A web application for industrial quality data analysis and statistics.
+
 
 ## Overview
 
