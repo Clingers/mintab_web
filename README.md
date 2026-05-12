@@ -1,284 +1,242 @@
 # Mintab Web
 
-* Updated front‑end: React + TypeScript + Vite + Tailwind + DaisyUI, modern tech UI, state managed by Zustand.
+Industrial quality data analysis console — upload datasets, compute statistics, and generate visualizations in the browser.
 
-A web application for industrial quality data analysis and statistics.
-
+![Dark Theme](https://img.shields.io/badge/theme-dark-0a0e14) ![React](https://img.shields.io/badge/React-19-61dafb) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Overview
 
-Mintab Web is a full-stack web application designed for analyzing industrial quality data. It provides tools for uploading CSV/Excel files, performing statistical analysis, and generating various types of plots to help visualize data patterns and quality metrics.
+Mintab Web is a full-stack web application designed for engineers and researchers who need quick statistical analysis of tabular data. Upload a CSV or Excel file, get descriptive statistics instantly, and generate publication-ready plots — all from a single dark-themed console interface.
 
 ## Features
 
-- **File Upload**: Support for CSV and Excel (.xlsx, .xls) files
-- **Data Analysis**: Calculate basic statistics for numeric columns (mean, median, std, min, max, etc.)
-- **Data Visualization**: Generate scatter plots, histograms, boxplots, and heatmaps
-- **Industrial Quality Focus**: Tailored for manufacturing and quality control data analysis
-- **Responsive Design**: Works on desktop and mobile devices
-- **Chinese Language Support**: Interface and documentation in Chinese
+- **File Upload** — Drag-and-drop or click to upload `.csv`, `.xlsx`, `.xls` files
+- **Auto Analysis** — Descriptive statistics computed immediately after upload (count, mean, median, std, min, max, Q1, Q3)
+- **Data Preview** — Tabular preview of uploaded data with column type indicators
+- **Visualization** — Generate scatter plots, histograms, boxplots, and correlation heatmaps
+- **Export** — Download statistics as CSV, plots as PNG
+- **Dark Console UI** — Technical Product Console design with emerald signal green accent
 
-## Technology Stack
+## Tech Stack
 
-### Backend
-- **Framework**: FastAPI (Python 3.11+)
-- **Data Processing**: Pandas
-- **Statistics**: Custom statistical utilities
-- **Plotting**: Matplotlib and Seaborn
-- **Containerization**: Docker
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS v4 |
+| State | Zustand |
+| Backend | FastAPI (Python) |
+| Data | Pandas + Matplotlib + Seaborn |
+| Deployment | Docker + Nginx reverse proxy |
 
-### Frontend
-- **Language**: TypeScript
-- **Framework**: React-like vanilla JS with custom UI components
-- **Styling**: CSS3
-- **Build**: Native TypeScript compilation
+## Architecture
 
-### DevOps
-- **Container Orchestration**: Docker Compose
-- **Reverse Proxy**: Nginx
-- **API Communication**: RESTful JSON APIs
+```
+┌─────────────────────────────────────────────┐
+│  Browser (React SPA)                        │
+│  ┌─────────┐ ┌──────────┐ ┌─────────────┐  │
+│  │ Upload  │ │  Stats   │ │    Plot     │  │
+│  │ Panel   │ │  Table   │ │   Viewer    │  │
+│  └────┬────┘ └────┬─────┘ └──────┬──────┘  │
+│       │            │              │          │
+│       └────────────┼──────────────┘          │
+│                    │                         │
+└────────────────────┼─────────────────────────┘
+                     │ HTTP (port 80)
+┌────────────────────┼─────────────────────────┐
+│  Nginx             │                         │
+│  /        → static │files (React build)      │
+│  /api/*   → proxy  │to backend:8000          │
+└────────────────────┼─────────────────────────┘
+                     │ port 8000
+┌────────────────────┼─────────────────────────┐
+│  FastAPI Backend                             │
+│  ┌────────┐ ┌───────────┐ ┌──────────────┐  │
+│  │/upload │ │ /analyze  │ │   /plot      │  │
+│  └────────┘ └───────────┘ └──────────────┘  │
+└──────────────────────────────────────────────┘
+```
 
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose
-- Git (for cloning the repository)
 
-### Installation
+- Docker & Docker Compose (or Docker with manual commands)
+- Node.js 18+ (for local development)
+- Python 3.11+ (for local backend development)
 
-1. Clone the repository:
+### Deploy with Docker
+
 ```bash
 git clone https://github.com/Clingers/mintab_web.git
 cd mintab_web
+
+# Build and start both services
+docker build -t mintab_web_backend -f Dockerfile.backend .
+docker build -t mintab_web_frontend -f Dockerfile.frontend .
+
+# Create network
+docker network create mintab_web_default 2>/dev/null || true
+
+# Start backend
+docker run -d --name backend \
+  --network mintab_web_default \
+  -p 8000:8000 \
+  --restart unless-stopped \
+  mintab_web_backend
+
+# Start frontend (Nginx)
+docker run -d --name mintab_frontend \
+  --network mintab_web_default \
+  -p 80:80 \
+  --restart unless-stopped \
+  mintab_web_frontend
 ```
 
-2. Build and start the services:
-```bash
-docker-compose up --build
-```
+Access at `http://localhost` (or your server IP).
 
-3. Access the application:
-   - Frontend: http://localhost
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs (Swagger UI)
+### Local Development
 
-### Development Mode
+**Backend:**
 
-For development without Docker:
-
-#### Backend
 ```bash
 cd backend
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --port 8000
 ```
 
-#### Frontend
+**Frontend:**
+
 ```bash
 cd frontend
-# Install dependencies if needed (project uses native TS compilation)
-# Open index.html in a browser or use a simple static server
+npm install
+npm run dev
 ```
 
-## API Endpoints
+Frontend dev server runs at `http://localhost:5173` with API proxy to `:8000`.
 
-### POST `/upload`
-Upload a CSV or Excel file for analysis.
+## API Reference
 
-**Parameters:**
-- `file`: CSV or Excel file (required)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check, returns `{"status": "ok", ...}` |
+| `/upload` | POST | Upload file (multipart/form-data), returns dataset info |
+| `/analyze` | POST | Compute statistics for a dataset |
+| `/plot` | POST | Generate a plot image (base64 PNG) |
 
-**Response:**
+### POST /upload
+
+```bash
+curl -X POST http://localhost:8000/upload \
+  -F "file=@data.csv;type=text/csv"
+```
+
+Response:
 ```json
 {
-  "dataset_id": "uuid-string",
-  "filename": "uploaded_file.csv",
-  "rows": 1000,
-  "columns": [
-    {
-      "name": "column_name",
-      "type": "numeric|categorical",
-      "non_null": 950,
-      "null_pct": 5.0,
-      "unique_values": 50
-    }
-  ],
-  "preview": [
-    {"column1": "value1", "column2": "value2"},
-    ...
-  ]
+  "dataset_id": "uuid",
+  "filename": "data.csv",
+  "rows": 100,
+  "columns": [{"name": "col1", "type": "numeric", "non_null": 100, ...}],
+  "preview": [{"col1": 1.5, "col2": 2.3}, ...]
 }
 ```
 
-### POST `/analyze`
-Perform statistical analysis on an uploaded dataset.
+### POST /analyze
 
-**Parameters:**
 ```json
-{
-  "dataset_id": "uuid-string"
-}
+{"dataset_id": "uuid"}
 ```
 
-**Response:**
+Response:
 ```json
 {
-  "dataset_id": "uuid-string",
+  "dataset_id": "uuid",
   "statistics": {
-    "column_name": {
-      "count": 1000,
-      "mean": 50.5,
-      "median": 50.0,
-      "std": 15.2,
-      "min": 10.0,
-      "max": 90.0,
-      "q1": 30.0,
-      "q3": 70.0
-    }
+    "col1": {"count": 100, "mean": 5.2, "median": 5.0, "std": 1.3, "min": 1, "max": 10, "q1": 3, "q3": 7}
   }
 }
 ```
 
-### POST `/plot`
-Generate a plot for the dataset.
+### POST /plot
 
-**Parameters:**
 ```json
 {
-  "dataset_id": "uuid-string",
-  "plot_type": "scatter|histogram|boxplot|heatmap",
-  "x_col": "column_name", // required for scatter
-  "y_col": "column_name", // required for scatter
-  "column": "column_name", // required for histogram/boxplot
-  "columns": ["col1", "col2"], // optional for boxplot
-  "method": "pearson|kendall|spearman" // optional for heatmap, default: pearson
+  "dataset_id": "uuid",
+  "plot_type": "histogram",
+  "column": "col1"
 }
 ```
 
-**Response:**
+Plot types and required parameters:
+- `scatter` — requires `x_col`, `y_col`
+- `histogram` — requires `column`
+- `boxplot` — requires `column`
+- `heatmap` — optional `method` (pearson/kendall/spearman)
+
+Response:
 ```json
-{
-  "image": "base64_encoded_png_string",
-  "format": "png"
-}
+{"image": "<base64 PNG>", "format": "png"}
 ```
 
-### GET `/health`
-Health check endpoint.
+## Design System
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "datasets_count": 0
-}
-```
+The UI follows the **Technical Product Console** archetype:
+
+- **Background**: Near-black (`#0a0e14`) with layered surfaces (`#111820`, `#1a2332`)
+- **Accent**: Emerald Signal Green (`#10b981`) with glow effects
+- **Typography**: Inter for UI, JetBrains Mono for data
+- **Components**: `.panel`, `.data-table`, `.btn-primary`, `.btn-ghost`, `.select-field`
+- **Borders**: Subtle (`#1e2d3d`) with hover state transitions
 
 ## Project Structure
 
 ```
 mintab_web/
-├── backend/                 # Python/FastAPI backend
-│   ├── main.py              # FastAPI application entrypoint
-│   ├── stats_utils.py       # Statistical calculation functions
-│   ├── plot_utils.py        # Plotting functions (matplotlib/seaborn)
-│   ├── tests/               # Unit tests
-│   │   ├── test_stats.py    # Tests for stats_utils
-│   │   └── test_plots.py    # Tests for plot_utils
-│   └── requirements.txt     # Python dependencies
-├── frontend/                # TypeScript frontend
+├── backend/
+│   ├── main.py              # FastAPI app, routes
+│   ├── stats_utils.py       # Statistical computation
+│   ├── plot_utils.py        # Plot generation (matplotlib)
+│   ├── requirements.txt
+│   └── tests/
+├── frontend/
 │   ├── src/
-│   │   ├── main.ts          # Application entrypoint
-│   │   ├── api.ts           # API communication layer
-│   │   ├── ui.ts            # UI component functions
-│   │   ├── types.ts         # TypeScript type definitions
-│   │   └── style.css        # Styling
-│   ├── public/              # Static assets
-│   ├── index.html           # HTML entrypoint
-│   ├── package.json         # npm dependencies
-│   └── tsconfig.json        # TypeScript configuration
-├── docker-compose.yml       # Docker Compose configuration
-├── Dockerfile.backend       # Backend Dockerfile
-├── Dockerfile.frontend      # Frontend Dockerfile
-├── nginx.conf               # Nginx configuration
-└── README.md                # This file
+│   │   ├── App.tsx          # Main layout
+│   │   ├── index.css        # Design system tokens
+│   │   ├── components/
+│   │   │   ├── UploadPanel.tsx
+│   │   │   ├── DatasetInfo.tsx
+│   │   │   ├── StatsTable.tsx
+│   │   │   └── PlotViewer.tsx
+│   │   ├── services/api.ts  # HTTP client
+│   │   ├── store/index.ts   # Zustand state
+│   │   └── types.ts         # TypeScript interfaces
+│   ├── package.json
+│   └── vite.config.ts
+├── nginx.conf
+├── Dockerfile.backend
+├── Dockerfile.frontend
+├── docker-compose.yml
+└── README.md
 ```
 
-## Configuration
+## Running Tests
 
-### Environment Variables
-The backend can be configured using environment variables:
-- `CORS_ORIGINS`: Comma-separated list of allowed origins for CORS (default: "*")
-- Other configurations can be added as needed
-
-### Docker Configuration
-The Docker Compose file defines two services:
-- **backend**: Runs the FastAPI API on port 8000
-- **frontend**: Serves the static frontend on port 80
-
-Nginx is used as a reverse proxy to route `/api` requests to the backend and serve static files for the frontend.
-
-## Testing
-
-### Backend Tests
-Run the backend unit tests:
 ```bash
-cd backend
-python -m pytest tests/ -v
-```
+# Backend
+cd backend && pytest -v tests/
 
-### Frontend Testing
-The frontend can be tested by:
-1. Manual testing through the browser interface
-2. Automated tests can be added using frameworks like Jest or Vitest
+# Frontend
+cd frontend && npm run test
+```
 
 ## Deployment
 
-### Production Deployment
-For production use, consider:
-1. Using a proper SSL certificate
-2. Setting environment-specific configurations
-3. Implementing authentication and authorization
-4. Adding rate limiting and security headers
-5. Using a production-grade WSGI server (like Gunicorn) instead of Uvicorn directly
-6. Setting up logging and monitoring
+Currently deployed at: `http://192.3.161.201`
 
-### Scaling
-The application can be scaled by:
-1. Running multiple backend instances behind a load balancer
-2. Using external storage for datasets instead of in-memory storage
-3. Offloading plot generation to worker queues for heavy computations
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+The application runs as two Docker containers behind Nginx:
+- `backend` — FastAPI on port 8000 (internal)
+- `mintab_frontend` — Nginx serving static files on port 80, proxying `/api/*` to backend
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Inspired by Minitab's statistical analysis capabilities
-- Built with FastAPI for high-performance API endpoints
-- Uses Pandas for efficient data manipulation
-- Plotting powered by Matplotlib and SeabornAPI documentation is available at http://localhost:8000/docs (Swagger UI) when the backend is running.
-
-## API Documentation
-
-The backend provides a RESTful API with automatic OpenAPI/Swagger documentation.
-
-When the backend is running, you can access:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- OpenAPI JSON: http://localhost:8000/openapi.json
-
-These documents are automatically generated from the FastAPI application and provide:
-- Detailed endpoint descriptions
-- Request/response schemas
-- Interactive API testing
-- Code examples in multiple languages
+MIT

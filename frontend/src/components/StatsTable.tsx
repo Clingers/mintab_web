@@ -9,16 +9,11 @@ export const StatsTable: React.FC = () => {
   const { statistics } = stats;
 
   const exportCsv = () => {
-    const headers = ['column', 'count', 'mean', 'median', 'std', 'min', 'max'];
+    const headers = ['column', 'count', 'mean', 'median', 'std', 'min', 'max', 'q1', 'q3'];
     const rows = Object.entries(statistics).map(([col, data]: [string, any]) => {
       return [
-        col,
-        data.count ?? '',
-        data.mean ?? '',
-        data.median ?? '',
-        data.std ?? '',
-        data.min ?? '',
-        data.max ?? '',
+        col, data.count ?? '', data.mean ?? '', data.median ?? '',
+        data.std ?? '', data.min ?? '', data.max ?? '', data.q1 ?? '', data.q3 ?? '',
       ].join(',');
     });
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -27,41 +22,49 @@ export const StatsTable: React.FC = () => {
   };
 
   return (
-    <div className="card bg-base-100 shadow-xl p-6 mb-6 overflow-x-auto">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="card-title text-2xl">统计结果</h2>
-        <button className="btn btn-sm btn-outline" onClick={exportCsv}>CSV 导出</button>
+    <div className="panel">
+      <div className="panel-header">
+        <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-text-muted)]">Statistical Analysis</span>
+        <button className="btn-ghost ml-auto" onClick={exportCsv}>
+          Export CSV
+        </button>
       </div>
-      <table className="table w-full">
-        <thead>
-          <tr>
-            <th>字段</th>
-            <th>计数</th>
-            <th>均值</th>
-            <th>中位数</th>
-            <th>标准差</th>
-            <th>最小值</th>
-            <th>最大值</th>
-          </tr>
-        </thead>
-      <tbody>
-          {Object.entries(statistics as Record<string, any>).map(([col, data]) => {
-            const d = data as any;
-            return (
-            <tr key={col}>
-              <td>{col}</td>
-              <td>{d.count ?? '-'}</td>
-              <td>{d.mean ?? '-'}</td>
-              <td>{d.median ?? '-'}</td>
-              <td>{d.std ?? '-'}</td>
-              <td>{d.min ?? '-'}</td>
-              <td>{d.max ?? '-'}</td>
-            </tr>
-            );
-          })}
-        </tbody>
-      </table>
 
+      <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Column</th>
+              <th>Count</th>
+              <th>Mean</th>
+              <th>Median</th>
+              <th>Std</th>
+              <th>Min</th>
+              <th>Q1</th>
+              <th>Q3</th>
+              <th>Max</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(statistics as Record<string, any>).map(([col, data]) => {
+              const d = data as any;
+              return (
+                <tr key={col}>
+                  <td className="font-semibold text-[var(--color-signal)]">{col}</td>
+                  <td>{d.count ?? '—'}</td>
+                  <td>{typeof d.mean === 'number' ? d.mean.toFixed(2) : '—'}</td>
+                  <td>{typeof d.median === 'number' ? d.median.toFixed(2) : '—'}</td>
+                  <td>{typeof d.std === 'number' ? d.std.toFixed(2) : '—'}</td>
+                  <td>{d.min ?? '—'}</td>
+                  <td>{d.q1 ?? '—'}</td>
+                  <td>{d.q3 ?? '—'}</td>
+                  <td>{d.max ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

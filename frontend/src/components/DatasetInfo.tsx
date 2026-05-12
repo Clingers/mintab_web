@@ -1,42 +1,67 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useMintabStore } from '../store';
-import { analyzeDataset } from '../services/api';
 
 export const DatasetInfo: React.FC = () => {
   const dataset = useMintabStore(state => state.dataset);
-  const setStats = useMintabStore(state => state.setStats);
   const loading = useMintabStore(state => state.loading);
-  const setLoading = useMintabStore(state => state.setLoading);
-  const setError = useMintabStore(state => state.setError);
-
-  useEffect(() => {
-    if (!dataset) return;
-    const fetchStats = async () => {
-      setLoading(true);
-      try {
-        const stats = await analyzeDataset(dataset.dataset_id);
-        setStats(stats);
-      } catch (e: any) {
-        setError(e?.message || '统计获取失败');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, [dataset]);
 
   if (!dataset) return null;
 
   return (
-    <div className="card bg-base-100 shadow-xl p-6 mb-6">
-      <h2 className="card-title text-2xl mb-2">{dataset.filename}</h2>
-      <p className="mb-2">{dataset.rows} rows • {dataset.columns.length} columns</p>
+    <div className="panel">
+      <div className="panel-header">
+        <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-text-muted)]">Data Preview</span>
+        <span className="ml-auto text-xs font-mono text-[var(--color-signal)]">
+          {dataset.rows} × {dataset.columns.length}
+        </span>
+      </div>
+
+      {/* Column metadata */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {dataset.columns.map((col) => (
+          <span
+            key={col.name}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
+          >
+            <span className="text-[var(--color-signal)]">{col.name}</span>
+            <span className="text-[var(--color-text-muted)]">({col.type})</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Data table */}
       {loading ? (
-        <div className="skeleton h-48 w-full"></div>
+        <div className="h-40 rounded-lg bg-[var(--color-surface-2)] animate-pulse"></div>
+      ) : dataset.preview && dataset.preview.length > 0 ? (
+        <div className="overflow-auto max-h-64 rounded-lg border border-[var(--color-border)]">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                {dataset.columns.map((col) => (
+                  <th key={col.name}>{col.name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataset.preview.map((row, idx) => (
+                <tr key={idx}>
+                  <td className="text-[var(--color-text-muted)]">{idx + 1}</td>
+                  {dataset.columns.map((col) => (
+                    <td key={col.name}>
+                      {row[col.name] != null
+                        ? String(row[col.name])
+                        : <span className="text-[var(--color-text-muted)] italic">null</span>
+                      }
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <pre className="bg-base-200 p-2 rounded overflow-x-auto max-h-48">
-          {JSON.stringify(dataset.preview, null, 2)}
-        </pre>
+        <p className="text-[var(--color-text-muted)] text-sm font-mono">No preview data available</p>
       )}
     </div>
   );
