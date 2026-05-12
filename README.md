@@ -1,12 +1,12 @@
 # Mintab Web
 
-Industrial quality data analysis console — upload datasets, compute statistics, and generate visualizations in the browser.
+Industrial quality data analysis console — upload datasets, compute statistics, generate visualizations, run SPC control charts, and design experiments — all in the browser.
 
 ![Dark Theme](https://img.shields.io/badge/theme-dark-0a0e14) ![React](https://img.shields.io/badge/React-19-61dafb) ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Overview
 
-Mintab Web is a full-stack web application designed for engineers and researchers who need quick statistical analysis of tabular data. Upload a CSV or Excel file, get descriptive statistics instantly, and generate publication-ready plots — all from a single dark-themed console interface.
+Mintab Web is a full-stack web application designed for engineers and researchers who need quick statistical analysis of tabular data. Upload a CSV or Excel file, get descriptive statistics instantly, generate publication-ready plots, monitor process stability with SPC control charts, and plan experiments with DOE — all from a single dark-themed console interface.
 
 ## Features
 
@@ -15,6 +15,8 @@ Mintab Web is a full-stack web application designed for engineers and researcher
 - **Data Preview** — Tabular preview of uploaded data with column type indicators
 - **Visualization** — Generate scatter plots, histograms, boxplots, and correlation heatmaps
 - **Export** — Download statistics as CSV, plots as PNG
+- **SPC Control Charts** — 5 chart types: X̄-R (均值-极差), X̄-S (均值-标准差), I-MR (单值-移动极差), p (不合格品率), u (单位缺陷数) — with control limits, violation markers, and Western Electric rules detection
+- **DOE Design of Experiments** — 4 design types: Full Factorial (全因子设计), Plackett-Burman (筛选设计), Central Composite (中心复合/响应曲面), Taguchi (正交表设计 L4/L8/L9/L16/L18)
 - **Dark Console UI** — Technical Product Console design with emerald signal green accent
 
 ## Tech Stack
@@ -24,7 +26,8 @@ Mintab Web is a full-stack web application designed for engineers and researcher
 | Frontend | React 19 + TypeScript + Vite + Tailwind CSS v4 |
 | State | Zustand |
 | Backend | FastAPI (Python) |
-| Data | Pandas + Matplotlib + Seaborn |
+| Data | Pandas + Matplotlib + Seaborn + SciPy |
+| Statistics | Statsmodels (for advanced SPC calculations) |
 | Deployment | Docker + Nginx reverse proxy |
 
 ## Architecture
@@ -32,27 +35,33 @@ Mintab Web is a full-stack web application designed for engineers and researcher
 ```
 ┌─────────────────────────────────────────────┐
 │  Browser (React SPA)                        │
-│  ┌─────────┐ ┌──────────┐ ┌─────────────┐  │
-│  │ Upload  │ │  Stats   │ │    Plot     │  │
-│  │ Panel   │ │  Table   │ │   Viewer    │  │
-│  └────┬────┘ └────┬─────┘ └──────┬──────┘  │
-│       │            │              │          │
-│       └────────────┼──────────────┘          │
-│                    │                         │
-└────────────────────┼─────────────────────────┘
-                     │ HTTP (port 80)
-┌────────────────────┼─────────────────────────┐
-│  Nginx             │                         │
-│  /        → static │files (React build)      │
-│  /api/*   → proxy  │to backend:8000          │
-└────────────────────┼─────────────────────────┘
-                     │ port 8000
-┌────────────────────┼─────────────────────────┐
-│  FastAPI Backend                             │
-│  ┌────────┐ ┌───────────┐ ┌──────────────┐  │
-│  │/upload │ │ /analyze  │ │   /plot      │  │
-│  └────────┘ └───────────┘ └──────────────┘  │
-└──────────────────────────────────────────────┘
+│  ┌──────────┐ ┌──────────┐ ┌────────────┐  │
+│  │  Upload  │ │  Stats   │ │   Plot     │  │
+│  │  Panel   │ │  Table   │ │  Viewer    │  │
+│  └────┬─────┘ └────┬─────┘ └─────┬──────┘  │
+│  ┌─────┴──────┐ ┌──┴────────┐    │          │
+│  │  SPC       │ │  DOE      │    │          │
+│  │  Control   │ │  Design   │    │          │
+│  └─────┬──────┘ └────┬──────┘    │          │
+│        │              │           │          │
+└────────┼──────────────┼───────────┼──────────┘
+         │              │           │ HTTP (port 80)
+┌────────┼──────────────┼───────────┼──────────┐
+│  Nginx │              │           │          │
+│  /          → static │files (React build)    │
+│  /api/*     → proxy  │to backend:8000        │
+│  /health    → proxy  │to backend:8000        │
+└─────────────┼──────────┼─────────────────────┘
+              │          │ port 8000
+┌─────────────┼──────────┼─────────────────────┐
+│  FastAPI Backend                              │
+│  ┌────────┐ ┌───────────┐ ┌──────────────┐   │
+│  │/upload │ │ /analyze  │ │   /plot      │   │
+│  └────────┘ └───────────┘ └──────────────┘   │
+│  ┌────────┐ ┌───────────┐                     │
+│  │ /spc   │ │  /doe     │                     │
+│  └────────┘ └───────────┘                     │
+└───────────────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -65,15 +74,18 @@ Mintab Web is a full-stack web application designed for engineers and researcher
 
 ### Deploy with Docker
 
+> **Note:** `docker-compose` v1 is incompatible with Docker 29+ on certain platforms.  
+> Use manual `docker build` + `docker run` commands as shown below.
+
 ```bash
 git clone https://github.com/Clingers/mintab_web.git
 cd mintab_web
 
-# Build and start both services
+# Build images
 docker build -t mintab_web_backend -f Dockerfile.backend .
 docker build -t mintab_web_frontend -f Dockerfile.frontend .
 
-# Create network
+# Create shared network
 docker network create mintab_web_default 2>/dev/null || true
 
 # Start backend
@@ -92,6 +104,9 @@ docker run -d --name mintab_frontend \
 ```
 
 Access at `http://localhost` (or your server IP).
+
+> **Important:** The backend container **must** be named `backend` for Nginx upstream resolution.  
+> Always start the backend container **before** the frontend.
 
 ### Local Development
 
@@ -116,12 +131,16 @@ Frontend dev server runs at `http://localhost:5173` with API proxy to `:8000`.
 
 ## API Reference
 
+### Core Endpoints
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check, returns `{"status": "ok", ...}` |
-| `/upload` | POST | Upload file (multipart/form-data), returns dataset info |
-| `/analyze` | POST | Compute statistics for a dataset |
+| `/upload` | POST | Upload file (multipart/form-data), returns dataset info and preview |
+| `/analyze` | POST | Compute descriptive statistics for a dataset |
 | `/plot` | POST | Generate a plot image (base64 PNG) |
+| `/spc` | POST | Generate SPC control charts with control limits and violation detection |
+| `/doe` | POST | Generate Design of Experiments matrices and visualizations |
 
 ### POST /upload
 
@@ -136,8 +155,8 @@ Response:
   "dataset_id": "uuid",
   "filename": "data.csv",
   "rows": 100,
-  "columns": [{"name": "col1", "type": "numeric", "non_null": 100, ...}],
-  "preview": [{"col1": 1.5, "col2": 2.3}, ...]
+  "columns": [{"name": "col1", "type": "numeric", "non_null": 100, "null_pct": 0.0, "unique_values": 50}],
+  "preview": [{"col1": 1.5, "col2": 2.3}]
 }
 ```
 
@@ -170,13 +189,105 @@ Response:
 Plot types and required parameters:
 - `scatter` — requires `x_col`, `y_col`
 - `histogram` — requires `column`
-- `boxplot` — requires `column`
+- `boxplot` — optional `columns` (list)
 - `heatmap` — optional `method` (pearson/kendall/spearman)
 
 Response:
 ```json
 {"image": "<base64 PNG>", "format": "png"}
 ```
+
+### POST /spc
+
+Generate SPC control charts with control limits and violation detection.
+
+```json
+{
+  "dataset_id": "uuid",
+  "chart_type": "xbar_r",
+  "column": "measurement",
+  "group_col": null,
+  "group_size": 5,
+  "nsigma": 3.0
+}
+```
+
+Supported `chart_type` values:
+| Chart Type | Description | Requires |
+|-----------|-------------|----------|
+| `xbar_r` | X̄-R Chart (均值-极差) | `column`, optional `group_col`/`group_size` |
+| `xbar_s` | X̄-S Chart (均值-标准差) | `column`, optional `group_col`/`group_size` |
+| `i_mr` | I-MR Chart (单值-移动极差) | `column` |
+| `p` | p-Chart (不合格品率) | `defect_col`, optional `total_col`/`constant_sample_size` |
+| `u` | u-Chart (单位缺陷数) | `defect_col`, optional `sample_size_col`/`constant_unit_size` |
+
+Response includes:
+```json
+{
+  "chart_type": "xbar_r",
+  "images": {
+    "combined": "<base64 PNG>",
+    "xbar": "<base64 PNG>",
+    "r": "<base64 PNG>"
+  },
+  "chart_data": {
+    "xbar_limits": {"ucl": 10.5, "cl": 9.2, "lcl": 7.9},
+    "r_limits": {"ucl": 3.1, "cl": 1.5, "lcl": 0.0},
+    "violations": [/* points violating Western Electric rules */],
+    "subgroups": [/* data points with group statistics */]
+  }
+}
+```
+
+### POST /doe
+
+Generate Design of Experiments matrices and visualizations.
+
+**Full Factorial:**
+```json
+{
+  "design_type": "full_factorial",
+  "n_factors": 3,
+  "levels": 2,
+  "center_points": 1,
+  "factor_names": ["Temp", "Pressure", "Catalyst"]
+}
+```
+
+**Plackett-Burman:**
+```json
+{
+  "design_type": "plackett_burman",
+  "n_factors": 7,
+  "n_runs": 12
+}
+```
+
+**Central Composite (CCD):**
+```json
+{
+  "design_type": "central_composite",
+  "n_factors": 2,
+  "face": "circumscribed",
+  "alpha": 1.414,
+  "center_points": 5
+}
+```
+
+**Taguchi Orthogonal Array:**
+```json
+{
+  "design_type": "taguchi",
+  "table_name": "L9",
+  "n_factors": 4
+}
+```
+
+Supported `design_type` values: `full_factorial`, `plackett_burman`, `central_composite`, `taguchi`
+
+Supported Taguchi tables: `L4`, `L8`, `L9`, `L16`, `L18`
+
+Response includes design matrix, parameter summaries, and base64-encoded visualizations (cube plot, factor distribution, design matrix heatmap).
 
 ## Design System
 
@@ -193,29 +304,40 @@ The UI follows the **Technical Product Console** archetype:
 ```
 mintab_web/
 ├── backend/
-│   ├── main.py              # FastAPI app, routes
-│   ├── stats_utils.py       # Statistical computation
-│   ├── plot_utils.py        # Plot generation (matplotlib)
+│   ├── main.py              # FastAPI app, all API routes
+│   ├── stats_utils.py       # Descriptive statistics computation
+│   ├── plot_utils.py        # Plot generation (matplotlib/seaborn)
+│   ├── spc_utils.py         # SPC control chart calculations
+│   ├── spc_plot.py          # SPC chart rendering (matplotlib)
+│   ├── doe_utils.py         # DOE design matrix generation
+│   ├── doe_plot.py          # DOE visualization (cube, grid, heatmap)
 │   ├── requirements.txt
 │   └── tests/
+│       ├── test_api.py
+│       ├── test_stats.py
+│       ├── test_plots.py
+│       └── conftest.py
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx          # Main layout
-│   │   ├── index.css        # Design system tokens
-│   │   ├── components/
-│   │   │   ├── UploadPanel.tsx
-│   │   │   ├── DatasetInfo.tsx
-│   │   │   ├── StatsTable.tsx
-│   │   │   └── PlotViewer.tsx
-│   │   ├── services/api.ts  # HTTP client
-│   │   ├── store/index.ts   # Zustand state
-│   │   └── types.ts         # TypeScript interfaces
+│   │   ├── App.tsx                # Main layout + navigation
+│   │   ├── main.tsx               # Entry point
+│   │   ├── index.css              # Design system tokens
+│   │   ├── types.ts               # TypeScript interfaces
+│   │   ├── store/index.ts         # Zustand state
+│   │   ├── services/api.ts        # HTTP client
+│   │   └── components/
+│   │       ├── UploadPanel.tsx    # File upload (CSV/Excel)
+│   │       ├── DatasetInfo.tsx    # Dataset metadata
+│   │       ├── StatsTable.tsx     # Statistics table
+│   │       ├── PlotViewer.tsx     # Scatter, histogram, boxplot, heatmap
+│   │       ├── SpcControl.tsx     # SPC control chart UI
+│   │       └── DoeDesign.tsx      # DOE experiment design UI
 │   ├── package.json
 │   └── vite.config.ts
-├── nginx.conf
+├── nginx.conf                     # Nginx reverse proxy config
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
-├── docker-compose.yml
+├── docker-compose.yml             # (docker-compose v3.8, for reference only)
 └── README.md
 ```
 
@@ -234,8 +356,10 @@ cd frontend && npm run test
 Currently deployed at: `http://192.3.161.201`
 
 The application runs as two Docker containers behind Nginx:
-- `backend` — FastAPI on port 8000 (internal)
-- `mintab_frontend` — Nginx serving static files on port 80, proxying `/api/*` to backend
+- `backend` — FastAPI on port 8000 (internal, **must** be named `backend` for Nginx upstream resolution)
+- `mintab_frontend` — Nginx serving static files on port 80, proxying `/api/*` and `/health` to backend
+
+> **Note:** This deployment uses manual `docker build` + `docker run` (not `docker-compose`) because `docker-compose` v1 is incompatible with Docker 29 on the target VPS. The backend must be started **before** the frontend.
 
 ## License
 
